@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Kanban Board - Apple Design mit Kategorien</title>
+<link href="css/apple-styles-enhanced.css" rel="stylesheet"/>
+<!-- Apple-style Icons (SF Symbols inspired) -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<!-- Apple Web App Meta Tags -->
+<meta content="yes" name="apple-mobile-web-app-capable"/>
+<meta content="default" name="apple-mobile-web-app-status-bar-style"/>
+<meta content="Kanban Board" name="apple-mobile-web-app-title"/>
+<!-- Favicon -->
+<link href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;rect width='100' height='100' rx='20' fill='%23007AFF'/&gt;&lt;text x='50' y='65' font-family='system-ui' font-size='60' fill='white' text-anchor='middle'&gt;📋&lt;/text&gt;&lt;/svg&gt;" rel="apple-touch-icon" sizes="180x180"/>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+<!-- Initial loading screen with Apple-style animation -->
+<div class="loading-screen" id="loading-screen">
+<div class="loading-content">
+<div class="loading-icon">
+<svg fill="none" height="80" viewbox="0 0 80 80" width="80" xmlns="http://www.w3.org/2000/svg">
+<rect fill="currentColor" fill-opacity="0.1" height="80" rx="16" width="80"></rect>
+<path d="M20 25h40v6H20v-6zm0 12h40v6H20v-6zm0 12h28v6H20v-6z" fill="currentColor"></path>
+<circle cx="15" cy="28" fill="currentColor" opacity="0.6" r="2"></circle>
+<circle cx="15" cy="40" fill="currentColor" opacity="0.6" r="2"></circle>
+<circle cx="15" cy="52" fill="currentColor" opacity="0.6" r="2"></circle>
+</svg>
+</div>
+<h2 class="sf-display">Kanban Board</h2>
+<p class="sf-text" style="color: var(--apple-secondary-label); margin-top: 8px;">mit Kategorien wird geladen...</p>
+<div class="loading-spinner"></div>
+</div>
+</div>
+<!-- App content will be dynamically loaded here -->
+<div id="app-root"></div>
+<!-- Timeline View Template (will be injected by JavaScript) -->
+<template id="timeline-template">
+<div class="timeline-container">
+<div class="timeline-header">
+<h2 class="sf-display">Timeline</h2>
+<div class="timeline-controls">
+<div class="timeline-filter-container">
+<div class="category-filter-bar" id="timeline-category-filter">
+<!-- Category filters will be populated here -->
+</div>
+</div>
+<div class="timeline-view-options">
+<button class="timeline-view-btn active" data-view="all">
+<span class="timeline-view-icon">📅</span>
+                        Alle
+                    </button>
+<button class="timeline-view-btn" data-view="today">
+<span class="timeline-view-icon">📍</span>
+                        Heute
+                    </button>
+<button class="timeline-view-btn" data-view="week">
+<span class="timeline-view-icon">📊</span>
+                        Woche
+                    </button>
+</div>
+</div>
+</div>
+<div class="timeline-content">
+<div class="timeline-scroll-container">
+<div class="timeline-track" id="timeline-track">
+<!-- Timeline items will be populated here -->
+</div>
+</div>
+</div>
+<div class="timeline-empty" id="timeline-empty" style="display: none;">
+<div class="empty-state">
+<div class="empty-icon">
+<svg fill="none" height="64" viewbox="0 0 64 64" width="64" xmlns="http://www.w3.org/2000/svg">
+<circle cx="32" cy="32" fill="currentColor" fill-opacity="0.1" r="24"></circle>
+<path d="M32 20v24l16 8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<circle cx="32" cy="32" r="24" stroke="currentColor" stroke-width="2"></circle>
+</svg>
+</div>
+<h3 class="sf-display">Keine Termine gefunden</h3>
+<p class="sf-text">Fügen Sie Aufgaben mit Fälligkeitsdaten hinzu, um sie in der Timeline zu sehen.</p>
+</div>
+</div>
+</div>
+</template>
+<!-- Configuration Modal with Apple Sheet Design -->
+<div class="modal" id="config-modal" style="display: none;">
+<div class="modal-content">
+<div class="modal-header">
+<h3 class="sf-display">Konfiguration wählen</h3>
+<span class="close">
+<svg fill="none" height="16" viewbox="0 0 16 16" width="16" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 4L4 12M4 4l8 8" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
+</svg>
+</span>
+</div>
+<div style="padding: 32px;">
+<div class="config-options">
+<div class="config-option" data-mode="firebase">
+<div class="config-icon">
+<svg fill="none" height="48" viewbox="0 0 48 48" width="48" xmlns="http://www.w3.org/2000/svg">
+<circle cx="24" cy="24" fill="currentColor" fill-opacity="0.1" r="20"></circle>
+<path d="M24 8v32M8 24h32" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
+<circle cx="24" cy="16" fill="currentColor" r="2"></circle>
+<circle cx="24" cy="32" fill="currentColor" r="2"></circle>
+<circle cx="16" cy="24" fill="currentColor" r="2"></circle>
+<circle cx="32" cy="24" fill="currentColor" r="2"></circle>
+</svg>
+</div>
+<h4 class="sf-display">Cloud-Synchronisation</h4>
+<p class="sf-text" style="color: var(--apple-secondary-label); margin: 12px 0;">Synchronisiert Ihre Aufgaben und Kategorien zwischen allen Geräten über Firebase</p>
+<div class="config-features">
+<span class="feature sf-text">
+<svg fill="none" height="12" style="margin-right: 6px;" viewbox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">
+<path d="M10 3L4.5 8.5L2 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+                                Echtzeit-Sync
+                            </span>
+<span class="feature sf-text">
+<svg fill="none" height="12" style="margin-right: 6px;" viewbox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">
+<path d="M10 3L4.5 8.5L2 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+                                Benutzerkonten
+                            </span>
+<span class="feature sf-text">
+<svg fill="none" height="12" style="margin-right: 6px;" viewbox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">
+<path d="M10 3L4.5 8.5L2 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+                                Kategorie-Synchronisation
+                            </span>
+</div>
+</div>
+<div class="config-option" data-mode="local">
+<div class="config-icon">
+<svg fill="none" height="48" viewbox="0 0 48 48" width="48" xmlns="http://www.w3.org/2000/svg">
+<rect fill="currentColor" fill-opacity="0.1" height="24" rx="2" width="36" x="6" y="10"></rect>
+<rect height="24" rx="2" stroke="currentColor" stroke-width="2" width="36" x="6" y="10"></rect>
+<rect fill="currentColor" height="2" width="12" x="18" y="34"></rect>
+<path d="M14 38h20" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
+<circle cx="15" cy="18" fill="var(--apple-blue)" r="1.5"></circle>
+<circle cx="20" cy="18" fill="var(--apple-green)" r="1.5"></circle>
+<circle cx="25" cy="18" fill="var(--apple-red)" r="1.5"></circle>
+</svg>
+</div>
+<h4 class="sf-display">Lokaler Modus</h4>
+<p class="sf-text" style="color: var(--apple-secondary-label); margin: 12px 0;">Speichert Ihre Aufgaben und Kategorien nur auf diesem Gerät</p>
+<div class="config-features">
+<span class="feature sf-text">
+<svg fill="none" height="12" style="margin-right: 6px;" viewbox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">
+<path d="M10 3L4.5 8.5L2 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+                                Sofort einsatzbereit
+                            </span>
+<span class="feature sf-text">
+<svg fill="none" height="12" style="margin-right: 6px;" viewbox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">
+<path d="M10 3L4.5 8.5L2 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+                                Keine Anmeldung
+                            </span>
+<span class="feature sf-text">
+<svg fill="none" height="12" style="margin-right: 6px;" viewbox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">
+<path d="M10 3L4.5 8.5L2 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+                                Individuelle Kategorien
+                            </span>
+</div>
+</div>
+</div>
+<div class="firebase-config" id="firebase-config" style="display: none;">
+<h4 class="sf-display" style="margin-bottom: 16px;">Firebase-Konfiguration</h4>
+<p class="sf-text" style="color: var(--apple-secondary-label); margin-bottom: 24px;">Geben Sie Ihre Firebase-Konfigurationsdaten ein:</p>
+<form id="firebase-config-form">
+<div class="form-group">
+<label class="sf-text">API Key:</label>
+<input id="firebase-api-key" placeholder="Ihre Firebase API Key" type="text"/>
+</div>
+<div class="form-group">
+<label class="sf-text">Auth Domain:</label>
+<input id="firebase-auth-domain" placeholder="ihr-projekt.firebaseapp.com" type="text"/>
+</div>
+<div class="form-group">
+<label class="sf-text">Project ID:</label>
+<input id="firebase-project-id" placeholder="ihr-projekt-id" type="text"/>
+</div>
+<div class="form-group">
+<label class="sf-text">Storage Bucket:</label>
+<input id="firebase-storage-bucket" placeholder="ihr-projekt.appspot.com" type="text"/>
+</div>
+<div class="form-group">
+<label class="sf-text">Messaging Sender ID:</label>
+<input id="firebase-messaging-sender-id" placeholder="123456789" type="text"/>
+</div>
+<div class="form-group">
+<label class="sf-text">App ID:</label>
+<input id="firebase-app-id" placeholder="1:123456789:web:abcdef" type="text"/>
+</div>
+<div class="form-actions">
+<button class="btn btn-secondary" id="back-to-options" type="button">Zurück</button>
+<button class="btn btn-primary" type="submit">Konfiguration speichern</button>
+</div>
+</form>
+<div class="config-help" style="margin-top: 24px; padding: 16px; background: var(--apple-secondary-system-fill); border-radius: var(--apple-radius-md);">
+<p class="sf-text" style="font-size: 14px; color: var(--apple-secondary-label);"><strong>Hilfe:</strong> Diese Daten finden Sie in Ihrer Firebase Console unter Projekteinstellungen → Allgemein → Ihre Apps.</p>
+<a class="help-link sf-text" href="https://console.firebase.google.com" style="display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;" target="_blank">
+<svg fill="none" height="12" viewbox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">
+<path d="M9 3L3 9M9 3H5M9 3v4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+</svg>
+                            Firebase Console öffnen
+                        </a>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script src="apple-kanban-categories.js"></script>
+<script>
+        // Apple-style configuration and initialization logic
+        document.addEventListener('DOMContentLoaded', () => {
+            const loadingScreen = document.getElementById('loading-screen');
+            const configModal = document.getElementById('config-modal');
+            const appRoot = document.getElementById('app-root');
+
+            // Check if configuration exists
+            const savedConfig = localStorage.getItem('kanban-config');
+            
+            if (savedConfig) {
+                const config = JSON.parse(savedConfig);
+                initializeApp(config);
+            } else {
+                // Show configuration modal with Apple-style animation
+                setTimeout(() => {
+                    loadingScreen.style.opacity = '0';
+                    loadingScreen.style.transform = 'scale(0.95)';
+                    setTimeout(() => {
+                        loadingScreen.style.display = 'none';
+                        configModal.style.display = 'block';
+                        // Animate modal in
+                        requestAnimationFrame(() => {
+                            configModal.style.opacity = '1';
+                        });
+                    }, 300);
+                }, 1500);
+            }
+
+            // Configuration option selection with Apple-style feedback
+            document.querySelectorAll('.config-option').forEach(option => {
+                option.addEventListener('click', (e) => {
+                    // Haptic feedback simulation
+                    if (navigator.vibrate) {
+                        navigator.vibrate(10);
+                    }
+                    
+                    document.querySelectorAll('.config-option').forEach(opt => {
+                        opt.classList.remove('selected');
+                        opt.style.transform = 'scale(1)';
+                    });
+                    
+                    option.classList.add('selected');
+                    option.style.transform = 'scale(0.98)';
+                    
+                    setTimeout(() => {
+                        option.style.transform = 'scale(1)';
+                    }, 150);
+
+                    const mode = option.dataset.mode;
+                    const firebaseConfig = document.getElementById('firebase-config');
+
+                    if (mode === 'firebase') {
+                        firebaseConfig.style.display = 'block';
+                        // Smooth scroll to firebase config
+                        firebaseConfig.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    } else {
+                        firebaseConfig.style.display = 'none';
+                        // Initialize local mode immediately with Apple-style transition
+                        setTimeout(() => {
+                            const config = { mode: 'local' };
+                            localStorage.setItem('kanban-config', JSON.stringify(config));
+                            
+                            configModal.style.opacity = '0';
+                            configModal.style.transform = 'scale(0.95)';
+                            setTimeout(() => {
+                                configModal.style.display = 'none';
+                                initializeApp(config);
+                            }, 300);
+                        }, 500);
+                    }
+                });
+            });
+
+            // Back to options button
+            document.getElementById('back-to-options').addEventListener('click', () => {
+                document.getElementById('firebase-config').style.display = 'none';
+                document.querySelectorAll('.config-option').forEach(opt => 
+                    opt.classList.remove('selected'));
+            });
+
+            // Firebase configuration form
+            document.getElementById('firebase-config-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                const config = {
+                    mode: 'firebase',
+                    firebase: {
+                        apiKey: document.getElementById('firebase-api-key').value,
+                        authDomain: document.getElementById('firebase-auth-domain').value,
+                        projectId: document.getElementById('firebase-project-id').value,
+                        storageBucket: document.getElementById('firebase-storage-bucket').value,
+                        messagingSenderId: document.getElementById('firebase-messaging-sender-id').value,
+                        appId: document.getElementById('firebase-app-id').value
+                    }
+                };
+
+                // Validate configuration
+                const requiredFields = ['apiKey', 'authDomain', 'projectId', 'appId'];
+                const isValid = requiredFields.every(field => config.firebase[field]);
+
+                if (!isValid) {
+                    // Apple-style alert
+                    showAppleAlert('Bitte füllen Sie alle erforderlichen Felder aus.');
+                    return;
+                }
+
+                localStorage.setItem('kanban-config', JSON.stringify(config));
+                
+                configModal.style.opacity = '0';
+                configModal.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    configModal.style.display = 'none';
+                    initializeApp(config);
+                }, 300);
+            });
+
+            function initializeApp(config) {
+                // Set the configuration globally
+                window.kanbanConfig = config;
+
+                // Show loading screen briefly
+                const tempLoading = document.createElement('div');
+                tempLoading.className = 'loading-screen';
+                tempLoading.innerHTML = `
+                    <div class="loading-content">
+                        <div class="loading-icon">
+                            <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="80" height="80" rx="16" fill="currentColor" fill-opacity="0.1"/>
+                                <path d="M20 25h40v6H20v-6zm0 12h40v6H20v-6zm0 12h28v6H20v-6z" fill="currentColor"/>
+                                <circle cx="15" cy="28" r="2" fill="var(--apple-blue)" opacity="0.8"/>
+                                <circle cx="15" cy="40" r="2" fill="var(--apple-green)" opacity="0.8"/>
+                                <circle cx="15" cy="52" r="2" fill="var(--apple-red)" opacity="0.8"/>
+                            </svg>
+                        </div>
+                        <h2 class="sf-display">Initialisierung...</h2>
+                        <p class="sf-text" style="color: var(--apple-secondary-label); margin-top: 8px;">Kategorien werden geladen</p>
+                        <div class="loading-spinner"></div>
+                    </div>
+                `;
+                document.body.appendChild(tempLoading);
+
+                setTimeout(() => {
+                    // Initialize the appropriate app version
+                    if (config.mode === 'firebase' && typeof firebase !== 'undefined') {
+                        try {
+                            firebase.initializeApp(config.firebase);
+                            window.app = new AppleKanbanApp();
+                        } catch (error) {
+                            console.error('Firebase initialization failed:', error);
+                            showAppleAlert('Firebase-Konfiguration fehlerhaft. Wechsle zum lokalen Modus.');
+                            initializeLocalMode();
+                        }
+                    } else {
+                        initializeLocalMode();
+                    }
+                    
+                    // Remove loading screen
+                    tempLoading.style.opacity = '0';
+                    setTimeout(() => {
+                        document.body.removeChild(tempLoading);
+                    }, 300);
+                }, 1000);
+            }
+
+            function initializeLocalMode() {
+                const config = { mode: 'local' };
+                localStorage.setItem('kanban-config', JSON.stringify(config));
+                window.kanbanConfig = config;
+                window.app = new AppleKanbanApp();
+            }
+
+            function showAppleAlert(message) {
+                // Create Apple-style alert
+                const alert = document.createElement('div');
+                alert.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: var(--apple-secondary-grouped-background);
+                    border-radius: var(--apple-radius-xl);
+                    padding: var(--apple-spacing-xl);
+                    box-shadow: var(--apple-shadow-xl);
+                    border: 1px solid var(--apple-quaternary-system-fill);
+                    z-index: 10000;
+                    max-width: 300px;
+                    text-align: center;
+                    backdrop-filter: var(--apple-blur-light);
+                    -webkit-backdrop-filter: var(--apple-blur-light);
+                `;
+                
+                alert.innerHTML = `
+                    <p class="sf-text" style="color: var(--apple-label); margin-bottom: var(--apple-spacing-lg);">${message}</p>
+                    <button class="btn btn-primary" onclick="this.parentElement.remove()" style="width: 100%;">OK</button>
+                `;
+                
+                document.body.appendChild(alert);
+                
+                // Auto remove after 5 seconds
+                setTimeout(() => {
+                    if (alert.parentElement) {
+                        alert.remove();
+                    }
+                }, 5000);
+            }
+        });
+
+        // Add configuration reset function
+        function resetConfiguration() {
+            const shouldReset = confirm('Möchten Sie die Konfiguration zurücksetzen? Dies wird die App neu laden.');
+            if (shouldReset) {
+                localStorage.removeItem('kanban-config');
+                location.reload();
+            }
+        }
+
+        // Add to global scope for debugging
+        window.resetConfiguration = resetConfiguration;
+    </script>
+</body>
+</html>
